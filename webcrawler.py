@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Crawl all configured sites for security issues."""
+"""Crawl all configured sites and search for security issues."""
 
 import argparse
 import queue
