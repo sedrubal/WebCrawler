@@ -1,0 +1,62 @@
+---
+
+sites:
+  # - https://heise.de/
+  # - https://golem.de/
+  # - https://fau.de/
+  # - https://fablab.fau.de/
+  # - https://rommelwood.de/
+  # - https://mail.rommel.stw.uni-erlangen.de/
+  # - https://minis-hip.de/
+  - https://journey.hawo.net/
+  - https://techfak-sommerfest.de/
+  - https://sedrubal.de/
+
+search_for_files:
+  # search for SSL private keys
+  - server.key
+  - priv.key
+  - private.key
+  - privatekey.key
+  - '{domain}.key'
+  - server.pem
+  - priv.pen
+  - private.pem
+  - privatekey.pem
+  - '{domain}.pem'
+  - server.der
+  - priv.der
+  - private.der
+  - privatekey.der
+  - '{domain}.der'
+  # search for SQL dumps
+  - db.sql
+  - db.sqlite3
+  - dump.sql
+  - adump.sql
+  - dumpfile.sql
+  - backup.sql
+  - backupfile.sql
+  - backup-file.sql
+  - my_databases.sql
+  - all_databases.sql
+  - filetosaveto.sql
+  - '{domain}.sql'
+  - db.sql.gz
+  - dump.sql.gz
+  - adump.sql.gz
+  - dumpfile.sql.gz
+  - backup.sql.gz
+  - backupfile.sql.gz
+  - backup-file.sql.gz
+  - my_databases.sql.gz
+  - all_databases.sql.gz
+  - filetosaveto.sql.gz
+  - '{domain}.sql.gz'
+  # common CMS files
+  - wp-config.php
+  # common CVS files
+  - .git/config
+  - .svn/  # TODO ???
+
+...
