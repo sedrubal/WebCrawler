@@ -4,8 +4,8 @@ Crawl sites and search for security issues.
 
 ## Installation
 
-- clone git
-- `python3 -m virtualenv -p python3.6 --system-site-packages .venv && . ./.venv/bin/activat`
+- `git clone git@github.com:sedrubal/WebCrawler.git && cd ./WebCrawler/`
+- `python3 -m virtualenv -p python3.6 --system-site-packages .venv && . ./.venv/bin/activate`
 - `pip3 install -r ./requirements.txt`
 - `./webcrawler.py -vvv ./config-example.yml -`
 
