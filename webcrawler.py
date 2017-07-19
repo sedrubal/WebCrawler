@@ -3,11 +3,11 @@
 """Crawl all configured sites and search for security issues."""
 
 import argparse
+import collections
 import queue
 import re
 import sys
 import threading
-import collections
 
 import requests
 import yaml
@@ -25,7 +25,7 @@ TASK_QUEUE = queue.Queue()
 RESULTS = collections.defaultdict(list)
 
 
-DOMAIN_REGEX = re.compile(r'^http(s)?:\/\/(?P<domain>([\w\-\_]+\.)+[\w]+)\/.*')
+DOMAIN_REGEX = re.compile(r'^http(s)?:\/\/(?P<domain>([\w\-\_]+\.)+[\w]+)(\/.*|$)')
 
 
 def error(*msgs):
@@ -134,11 +134,19 @@ def main():
     """
     args = parse_args()
     config = yaml.load(stream=args.config_file)
+    sites = set()  # ensure we don't check a site twice
+    # sets also scramble entries. It's ok if the sites will be scrambled,
+    # because so one slow site does not slow down all threads simultaniously
+    # and maybe we can trick DOS prevention mechanisms.
 
     for site in config['sites']:
         for file_name in config['search_for_files']:
             domain = DOMAIN_REGEX.match(site).groupdict()['domain']
-            TASK_QUEUE.put(site + file_name.format(domain=domain))
+            if not site.endswith('/'):
+                site += '/'
+            sites.add(site + file_name.format(domain=domain))
+
+    [TASK_QUEUE.put(site) for site in sites]  # add all sites to queue
 
     threads = []
     for _ in range(THREAD_COUNT):
