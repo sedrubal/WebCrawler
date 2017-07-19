@@ -7,6 +7,7 @@ import argparse
 import collections
 import queue
 import re
+import shutil
 import sys
 import threading
 
@@ -62,6 +63,26 @@ def info(*msgs):
     )
 
 
+def print_progress(verbosity):
+    """Print current progress to stderr."""
+    progress = 1 - TASK_QUEUE.qsize() / TASK_COUNT
+    if verbosity == 0:
+        # we can print a progress bar as nothing else spams to stderr
+        col = shutil.get_terminal_size().columns
+        col -= len('___%[ ]')
+        bar_width = progress * col
+        print('\r{prog: >3}%[{bar}{half}{white}]'.format(
+            prog=int(progress * 100),
+            bar=int(bar_width) * '=',
+            half='-' if bar_width % 1 > .5 else ' ',
+            white=' ' * (col - int(bar_width) - 1),
+        ), end='', file=sys.stderr)
+        if progress == 1:
+            print()
+    else:
+        info('Progress: {prog: >3}%'.format(prog=int(progress * 100)))
+
+
 def parse_args():
     """
     Parse cmd line args.
@@ -85,6 +106,12 @@ def parse_args():
         action='count',
         default=0,
         help='More output',
+    )
+    parser.add_argument(
+        '--no-progress',
+        action='store_true',
+        default=False,
+        help='Hide progress output',
     )
 
     if 'argcomplete' in globals():
@@ -119,10 +146,15 @@ def crawl(url, verbosity=0):
         RESULTS[domain].append(url)
 
 
-def worker(verbosity=0):
-    """Execute jobs."""
+def worker(verbosity=0, progress=True):
+    """Execute jobs.
+
+    progress: if True print progress to stderr.
+    """
     while True:
         site = TASK_QUEUE.get()
+        if progress:
+            print_progress(verbosity)
         if not site:
             return
 
@@ -150,6 +182,8 @@ def main():
                 site += '/'
             sites.add(site + file_name.format(domain=domain))
 
+    global TASK_COUNT
+    TASK_COUNT = len(sites)
     [TASK_QUEUE.put(site) for site in sites]  # add all sites to queue
 
     threads = []
@@ -157,7 +191,10 @@ def main():
         thread = threading.Thread(
             target=worker,
             daemon=True,
-            kwargs={'verbosity': args.verbose}
+            kwargs={
+                'verbosity': args.verbose,
+                'progress': not args.no_progress,
+            }
         )
         threads.append(thread)
         thread.start()
