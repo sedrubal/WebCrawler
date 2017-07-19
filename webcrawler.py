@@ -95,10 +95,13 @@ def parse_args():
 def http_get(url):
     """Try to get url. Return text or None in case of erros."""
     try:
-        req = requests.get(url)
+        req = requests.get(url, timeout=TIMEOUT)
         req.raise_for_status()
-        return req.text
-    except requests.exceptions.HTTPError:
+        if not req.headers['content-type'].lower().startswith('text/html'):
+            # ignore html files because most often this is not
+            # what we are searching for
+            return req.text
+    except Exception:
         return None
 
 
