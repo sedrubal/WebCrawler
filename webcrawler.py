@@ -113,6 +113,12 @@ def parse_args():
         default=False,
         help='Hide progress output',
     )
+    parser.add_argument(
+        '--no-auto-save',
+        action='store_true',
+        default=False,
+        help='Store results only at the end',
+    )
 
     if 'argcomplete' in globals():
         argcomplete.autocomplete(parser)
@@ -146,19 +152,35 @@ def crawl(url, verbosity=0):
         RESULTS[domain].append(url)
 
 
-def worker(verbosity=0, progress=True):
+def worker(verbosity=0, progress=True, out_file=None):
     """Execute jobs.
 
     progress: if True print progress to stderr.
+    out_file: if given save current results periodically to this file
     """
     while True:
         site = TASK_QUEUE.get()
         if progress:
             print_progress(verbosity)
+        if out_file and TASK_QUEUE.qsize() % 100 == 0:
+            save(out_file)  # save results every 100 queries
         if not site:
             return
 
         crawl(site, verbosity=verbosity)
+
+
+def save(out_file):
+    """Save the current state to out_file."""
+    if not out_file.isatty():
+        out_file.seek(0)
+    yaml.dump(
+        data=dict(RESULTS),
+        stream=out_file,
+        explicit_start=True,
+    )
+    if not out_file.isatty():
+        out_file.truncate()
 
 
 def main():
@@ -194,6 +216,7 @@ def main():
             kwargs={
                 'verbosity': args.verbose,
                 'progress': not args.no_progress,
+                'out_file': None if args.no_auto_save or args.out_file.isatty() else args.out_file,
             }
         )
         threads.append(thread)
@@ -207,12 +230,7 @@ def main():
         error('[x] Exiting due to exception in thread')
         exit(1)
 
-    # write results
-    yaml.dump(
-        data=dict(RESULTS),
-        stream=args.out_file,
-        explicit_start=True,
-    )
+    save(args.out_file)
 
 
 if __name__ == '__main__':
