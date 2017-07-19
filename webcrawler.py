@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# PYTHON_ARGCOMPLETE_OK
 """Crawl all configured sites and search for security issues."""
 
 import argparse
@@ -170,7 +171,11 @@ def main():
         exit(1)
 
     # write results
-    yaml.dump(data=dict(RESULTS), stream=args.out_file)
+    yaml.dump(
+        data=dict(RESULTS),
+        stream=args.out_file,
+        explicit_start=True,
+    )
 
 
 if __name__ == '__main__':

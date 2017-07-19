@@ -7,7 +7,6 @@ sites:
   # - https://fablab.fau.de/
   # - https://rommelwood.de/
   # - https://mail.rommel.stw.uni-erlangen.de/
-  # - https://minis-hip.de/
   - https://journey.hawo.net/
   - https://techfak-sommerfest.de/
   - https://sedrubal.de/
@@ -20,7 +19,7 @@ search_for_files:
   - privatekey.key
   - '{domain}.key'
   - server.pem
-  - priv.pen
+  - priv.pem
   - private.pem
   - privatekey.pem
   - '{domain}.pem'
