@@ -58,4 +58,19 @@ search_for_files:
   - .git/config
   - .svn/  # TODO ???
 
+fake_host_names:
+  - localhost
+  - admin
+  - management
+  - www
+  - nagios
+  - grafana
+  - status
+  - 'localhost.{domain}'
+  - 'admin.{domain}'
+  - 'management.{domain}'
+  - 'www.{domain}'
+  - 'nagios.{domain}'
+  - 'grafana.{domain}'
+  - 'status.{domain}'
 ...

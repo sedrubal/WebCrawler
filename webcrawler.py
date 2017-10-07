@@ -10,6 +10,7 @@ import re
 import shutil
 import sys
 import threading
+from enum import Enum
 
 import requests
 import yaml
@@ -24,10 +25,35 @@ TIMEOUT = 5  # seconds
 THREAD_COUNT = 8
 
 TASK_QUEUE = queue.Queue()
-RESULTS = collections.defaultdict(list)
+RESULTS = {}
 
 
 DOMAIN_REGEX = re.compile(r'^http(s)?:\/\/(?P<domain>([\w\-\_]+\.)+[\w]+)(\/.*|$)')
+
+class TASK_TYPES(Enum):
+    END = 'END'  # stop worker
+    GET = 'GET'  # get a simple site
+    POST = 'POST'  # post data to a site
+    HEAD = 'HEAD'  # send a head requests
+    HOST = 'HOST'  # send fake host
+
+
+class Task(collections.namedtuple('Task', ('task_type', 'url', 'args'))):
+    __slots__ = ()
+    def __new__(cls, task_type, url=None, args={}):
+        return super(Task, cls).__new__(cls, task_type, url, args)
+
+    @property
+    def domain(self):
+        """Return the domain part of url."""
+        return DOMAIN_REGEX.match(self.url).groupdict()['domain']
+
+    def __str__(self):
+        """Translate task to a human readable string."""
+        if self.task_type == TASK_TYPES.HOST:
+            return 'GET {url} with host {host}'.format(url=self.url, host=self.args['host_name'])
+        else:
+            return '{method} {url}'.format(method=self.task_type.name, url=self.url)
 
 
 def error(*msgs):
@@ -139,35 +165,54 @@ def http_get(url):
         return None
 
 
-def crawl(url, verbosity=0):
-    """Crawl url and search for security issues."""
-    domain = DOMAIN_REGEX.match(url).groupdict()['domain']
+def http_get_host(url, host):
+    """Try to get url but send host. Return text on success."""
+    try:
+        req = requests.get(url, headers={'host': host}, timeout=TIMEOUT)
+        req.raise_for_status()
+        return req.text
+    except Exception:
+        return None
+
+
+def crawl(task, verbosity=0):
+    """Crawl task and search for security issues."""
     if verbosity > 2:
-        info('Trying', url)
-    content = http_get(url)
-    if content:
-        if verbosity > 0:
-            warning('Found', url)
+        info('Trying', str(task))
 
-        RESULTS[domain].append(url)
+    if task.task_type == TASK_TYPES.GET:
+        content = http_get(url=task.url)
+        if content:
+            if verbosity > 0:
+                warning('Found', task.url)
+            RESULTS[task.domain].append(str(task))
+    elif task.task_type == TASK_TYPES.HOST:
+        content = http_get_host(url=task.url, host=task.args['host_name'])
+        if content:
+            if verbosity > 0:
+                warning('Found', task.url)
+            RESULTS[task.domain].append(str(task))
 
 
-def worker(verbosity=0, progress=True, out_file=None):
+def worker(verbosity=0, progress=True, auto_save_interval=0, out_file=None):
     """Execute jobs.
 
     progress: if True print progress to stderr.
     out_file: if given save current results periodically to this file
     """
     while True:
-        site = TASK_QUEUE.get()
+        task = TASK_QUEUE.get()
         if progress:
             print_progress(verbosity)
-        if out_file and TASK_QUEUE.qsize() % 100 == 0:
-            save(out_file)  # save results every 100 queries
-        if not site:
+        if task.task_type == TASK_TYPES.END:
             return
 
-        crawl(site, verbosity=verbosity)
+        crawl(task, verbosity=verbosity)
+
+        if out_file and TASK_QUEUE.qsize() % auto_save_interval == 0:
+            if verbosity > 4:
+                info('Saving...')
+            save(out_file)  # save results every $auto_save_interval queries
 
 
 def save(out_file):
@@ -192,21 +237,37 @@ def main():
     """
     args = parse_args()
     config = yaml.load(stream=args.config_file)
-    sites = set()  # ensure we don't check a site twice
-    # sets also scramble entries. It's ok if the sites will be scrambled,
-    # because so one slow site does not slow down all threads simultaniously
-    # and maybe we can trick DOS prevention mechanisms.
 
-    for site in config['sites']:
-        for file_name in config['search_for_files']:
-            domain = DOMAIN_REGEX.match(site).groupdict()['domain']
-            if not site.endswith('/'):
-                site += '/'
-            sites.add(site + file_name.format(domain=domain))
+    for site in set(config['sites']):
+        # ensure we don't check a site twice
+        # sets also scramble entries. It's ok if the sites will be scrambled,
+        # because so one slow site does not slow down all threads simultaniously
+        # and maybe we can trick DOS prevention mechanisms.
+        domain = DOMAIN_REGEX.match(site).groupdict()['domain']
+        RESULTS[domain] = []  # empty list for each domain to store the results
+        if not site.endswith('/'):
+            site += '/'
+
+        for file_name in set(config.get('search_for_files', [])):
+            # ensure we don't check a file twice
+            TASK_QUEUE.put(
+                Task(
+                    task_type=TASK_TYPES.GET,
+                    url=site + file_name.format(domain=domain),
+                )
+            )
+        for host_name in set(config.get('fake_host_names', [])):
+            # ensure we don't check a host twice
+            TASK_QUEUE.put(
+                Task(
+                    task_type=TASK_TYPES.HOST,
+                    url=site,
+                    args={'host_name': host_name.format(domain=domain)},
+                )
+            )
 
     global TASK_COUNT
-    TASK_COUNT = len(sites)
-    [TASK_QUEUE.put(site) for site in sites]  # add all sites to queue
+    TASK_COUNT = TASK_QUEUE.qsize()
 
     threads = []
     for _ in range(THREAD_COUNT):
@@ -216,12 +277,15 @@ def main():
             kwargs={
                 'verbosity': args.verbose,
                 'progress': not args.no_progress,
+                'auto_save_interval': 100,
                 'out_file': None if args.no_auto_save or args.out_file.isatty() else args.out_file,
             }
         )
         threads.append(thread)
         thread.start()
-        TASK_QUEUE.put(None)  # add one None per thread at end of queue
+        TASK_QUEUE.put(Task(
+            task_type=TASK_TYPES.END  # add one END task per thread at end of queue
+        ))
 
     for thread in threads:
         thread.join()
